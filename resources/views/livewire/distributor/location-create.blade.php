@@ -1,11 +1,11 @@
-<div class="flex flex-col gap-6">
+<div class="sg-page">
         <div>
             <flux:heading size="xl">{{ __('Create Location') }}</flux:heading>
             <flux:subheading>{{ __('Add a new distribution point') }}</flux:subheading>
         </div>
 
         <div class="grid gap-6 lg:grid-cols-2">
-            <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm p-4">
+            <div class="sg-card p-5">
                 <form wire:submit.prevent="save" class="space-y-4">
                     <flux:input wire:model="name" :label="__('Name')" required />
                     <flux:textarea wire:model="address" :label="__('Address')" required />
@@ -36,7 +36,7 @@
                 </form>
             </div>
 
-            <div class="space-y-3">
+            <div class="sg-card p-5 space-y-3">
                 <flux:heading size="lg">{{ __('Pick on Map') }}</flux:heading>
                 <livewire:shared.map-picker :latitude="$latitude" :longitude="$longitude" height-class="h-[420px]" />
             </div>

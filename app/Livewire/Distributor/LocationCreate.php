@@ -5,6 +5,8 @@ namespace App\Livewire\Distributor;
 use App\Models\Location;
 use App\Models\StockLog;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -50,10 +52,7 @@ class LocationCreate extends Component
             'photo' => ['nullable', 'image', 'max:2048'],
         ]);
 
-        $path = null;
-        if ($this->photo) {
-            $path = $this->photo->storePublicly('locations', 'public');
-        }
+        $path = $this->storePhotoAsWebp($this->photo);
 
         $location = Location::create([
             'distributor_id' => auth()->id(),
@@ -84,5 +83,43 @@ class LocationCreate extends Component
     {
         return view('livewire.distributor.location-create')
             ->layout('components.layouts.app', ['title' => __('Create Location')]);
+    }
+
+    private function storePhotoAsWebp($uploaded): ?string
+    {
+        if (! $uploaded) {
+            return null;
+        }
+
+        $imageData = @file_get_contents($uploaded->getRealPath());
+        if ($imageData === false) {
+            return $uploaded->storePublicly('locations', 'public');
+        }
+
+        $image = @imagecreatefromstring($imageData);
+        if (! $image) {
+            return $uploaded->storePublicly('locations', 'public');
+        }
+
+        if (function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($image);
+        }
+        imagealphablending($image, true);
+        imagesavealpha($image, true);
+
+        $fileName = 'locations/'.Str::uuid().'.webp';
+
+        ob_start();
+        $success = imagewebp($image, null, 85);
+        $webpData = ob_get_clean();
+        imagedestroy($image);
+
+        if (! $success || $webpData === false) {
+            return $uploaded->storePublicly('locations', 'public');
+        }
+
+        Storage::disk('public')->put($fileName, $webpData);
+
+        return $fileName;
     }
 }

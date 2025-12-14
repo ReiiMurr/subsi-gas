@@ -1,5 +1,5 @@
 <x-layouts.auth>
-    <div class="flex flex-col gap-6">
+    <div class="sg-page">
         <div
             class="relative w-full h-auto"
             x-cloak

@@ -46,6 +46,7 @@ class LandingMap extends Component
                 'longitude' => (float) $location->longitude,
                 'stock' => (int) $location->stock,
                 'is_open' => (bool) $location->is_open,
+                'photo_url' => $location->photo_url,
                 'distance' => isset($location->distance) ? (float) $location->distance : null,
                 'updated_at' => optional($location->updated_at)->toISOString(),
                 'updated_human' => optional($location->updated_at)?->diffForHumans(),

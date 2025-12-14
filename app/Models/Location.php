@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Location extends Model
 {
@@ -25,6 +27,8 @@ class Location extends Model
         'photo',
         'operating_hours',
     ];
+
+    protected $appends = ['photo_url'];
 
     protected function casts(): array
     {
@@ -79,5 +83,61 @@ class Location extends Model
         $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
 
         return $earthRadiusKm * $c;
+    }
+
+    public function getPhotoUrlAttribute(): ?string
+    {
+        if (! $this->photo) {
+            return null;
+        }
+
+        if (! str_ends_with(strtolower($this->photo), '.webp')) {
+            $converted = $this->convertStoredPhotoToWebp();
+
+            if ($converted) {
+                $this->forceFill(['photo' => $converted])->saveQuietly();
+            }
+        }
+
+        return Storage::url($this->photo);
+    }
+
+    private function convertStoredPhotoToWebp(): ?string
+    {
+        if (! $this->photo || ! Storage::disk('public')->exists($this->photo)) {
+            return null;
+        }
+
+        $imageData = @Storage::disk('public')->get($this->photo);
+        if ($imageData === false) {
+            return null;
+        }
+
+        $image = @imagecreatefromstring($imageData);
+        if (! $image) {
+            return null;
+        }
+
+        if (function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($image);
+        }
+        imagealphablending($image, true);
+        imagesavealpha($image, true);
+
+        $fileName = 'locations/'.Str::uuid().'.webp';
+
+        ob_start();
+        $success = imagewebp($image, null, 85);
+        $webpData = ob_get_clean();
+        imagedestroy($image);
+
+        if (! $success || $webpData === false) {
+            return null;
+        }
+
+        Storage::disk('public')->put($fileName, $webpData);
+        Storage::disk('public')->delete($this->photo);
+
+        return $fileName;
     }
 }

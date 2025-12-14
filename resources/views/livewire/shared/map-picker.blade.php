@@ -1,4 +1,4 @@
-<div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+<div class="sg-card overflow-hidden">
     <div
         data-map-picker
         data-lat="{{ $latitude }}"

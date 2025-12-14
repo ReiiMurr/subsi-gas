@@ -48,7 +48,6 @@ Route::prefix('admin')
         Route::get('dashboard', AdminDashboard::class)->name('admin.dashboard');
         Route::get('distributors', AdminDistributorList::class)->name('admin.distributors');
         Route::get('distributors/create', AdminDistributorCreate::class)->name('admin.distributors.create');
-        Route::get('users', AdminUserList::class)->name('admin.users');
         Route::get('locations', AdminLocationList::class)->name('admin.locations');
         Route::get('reports/export', AdminReportsExport::class)->name('admin.reports.export');
     });

@@ -6,6 +6,7 @@ use App\Models\Location;
 use App\Models\StockLog;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -76,7 +77,7 @@ class LocationEdit extends Component
                 Storage::disk('public')->delete($this->location->photo);
             }
 
-            $this->location->photo = $this->photo->storePublicly('locations', 'public');
+            $this->location->photo = $this->storePhotoAsWebp($this->photo);
         }
 
         $this->location->fill([
@@ -109,5 +110,39 @@ class LocationEdit extends Component
     {
         return view('livewire.distributor.location-edit')
             ->layout('components.layouts.app', ['title' => __('Edit Location')]);
+    }
+
+    private function storePhotoAsWebp($uploaded): string
+    {
+        $imageData = @file_get_contents($uploaded->getRealPath());
+        if ($imageData === false) {
+            return $uploaded->storePublicly('locations', 'public');
+        }
+
+        $image = @imagecreatefromstring($imageData);
+        if (! $image) {
+            return $uploaded->storePublicly('locations', 'public');
+        }
+
+        if (function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($image);
+        }
+        imagealphablending($image, true);
+        imagesavealpha($image, true);
+
+        $fileName = 'locations/'.Str::uuid().'.webp';
+
+        ob_start();
+        $success = imagewebp($image, null, 85);
+        $webpData = ob_get_clean();
+        imagedestroy($image);
+
+        if (! $success || $webpData === false) {
+            return $uploaded->storePublicly('locations', 'public');
+        }
+
+        Storage::disk('public')->put($fileName, $webpData);
+
+        return $fileName;
     }
 }

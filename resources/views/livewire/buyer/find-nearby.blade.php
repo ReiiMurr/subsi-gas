@@ -1,4 +1,4 @@
-<div class="flex flex-col gap-6" wire:poll.30s="refresh" data-buyer-nearby>
+<div class="sg-page" wire:poll.30s="refresh" data-buyer-nearby>
         <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
                 <flux:heading size="xl">{{ __('Find Gas Subsidy Nearby') }}</flux:heading>
@@ -32,7 +32,7 @@
         @endif
 
         <div class="grid gap-6 lg:grid-cols-2">
-            <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+            <div class="sg-card overflow-hidden">
                 <div class="p-4 border-b border-zinc-200 dark:border-zinc-700">
                     <div class="font-semibold">{{ __('Map') }}</div>
                     <div class="text-xs text-zinc-500 mt-1">{{ __('Markers are color-coded by stock level') }}</div>
@@ -44,7 +44,7 @@
 
             <div class="flex flex-col gap-4">
                 @if ($latitude === null || $longitude === null)
-                    <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm p-4">
+                    <div class="sg-card p-4">
                         <div class="text-sm text-zinc-500">
                             {{ __('Waiting for location permission...') }}
                         </div>
@@ -52,7 +52,7 @@
                 @endif
 
                 @forelse ($this->locations as $location)
-                    <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm p-4">
+                    <div class="sg-card p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <div class="font-semibold">{{ $location->name }}</div>
@@ -90,7 +90,7 @@
                         </div>
                     </div>
                 @empty
-                    <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm p-4">
+                    <div class="sg-card p-4">
                         <div class="text-sm text-zinc-500">
                             {{ __('No locations found in selected radius.') }}
                         </div>

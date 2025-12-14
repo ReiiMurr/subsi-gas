@@ -1,4 +1,4 @@
-<div class="flex flex-col gap-6">
+<div class="sg-page">
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
                 <flux:heading size="xl">{{ __('Locations') }}</flux:heading>
@@ -10,7 +10,7 @@
             </div>
         </div>
 
-        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+        <div class="sg-card overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead class="bg-zinc-50 dark:bg-zinc-950/40 text-zinc-500">
