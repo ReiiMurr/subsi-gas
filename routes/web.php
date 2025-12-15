@@ -16,8 +16,22 @@ use App\Livewire\Distributor\LocationCreate as DistributorLocationCreate;
 use App\Livewire\Distributor\LocationEdit as DistributorLocationEdit;
 use App\Livewire\Public\LandingMap;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/', LandingMap::class)->name('home');
+
+Route::get('storage/{path}', function (string $path) {
+    if (str_contains($path, '..')) {
+        abort(404);
+    }
+
+    $disk = Storage::disk('public');
+    if (! $disk->exists($path)) {
+        abort(404);
+    }
+
+    return $disk->response($path);
+})->where('path', '.*');
 
 Route::get('dashboard', function () {
     $user = auth()->user();

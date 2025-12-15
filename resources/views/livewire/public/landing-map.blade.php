@@ -73,7 +73,7 @@
                                             :key="'stock-public-'.$location->id"
                                         />
                                         @if (isset($location->distance))
-                                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ number_format($location->distance, 2) }} km</div>
+                                            <div class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ number_format($location->distance, 2) }} km (garis lurus)</div>
                                         @endif
                                     </div>
 

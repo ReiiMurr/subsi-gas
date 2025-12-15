@@ -167,6 +167,25 @@ function formatDistance(distanceKm) {
     return `${distanceKm.toFixed(2)} km`;
 }
 
+function formatDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+        return null;
+    }
+
+    const totalMinutes = Math.round(seconds / 60);
+    if (totalMinutes < 60) {
+        return `${totalMinutes} menit`;
+    }
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (minutes === 0) {
+        return `${hours} jam`;
+    }
+
+    return `${hours} jam ${minutes} menit`;
+}
+
 function ensurePublicLocationsListener(map, markersLayer) {
     window.__subsiGasPublicMarkersLayer = markersLayer;
 
@@ -232,6 +251,9 @@ function ensurePublicDirections(map) {
     window.__subsiGasPublicRouteLayer = window.L.layerGroup().addTo(map);
     window.__subsiGasPublicUserLayer = window.L.layerGroup().addTo(map);
     window.__subsiGasPublicHasCenteredToUser = false;
+    window.__subsiGasPublicCenteredAccuracy = null;
+
+    const STORAGE_KEY = 'subsiGas:lastGoodPosition';
 
     if (window.__subsiGasPublicDirectionsAdded) {
         return;
@@ -262,6 +284,89 @@ function ensurePublicDirections(map) {
         })
             .addTo(layer)
             .bindPopup('Lokasi Anda');
+    };
+
+    const loadStoredPosition = () => {
+        try {
+            const raw = window.localStorage?.getItem?.(STORAGE_KEY);
+            if (!raw) {
+                return null;
+            }
+
+            const parsed = JSON.parse(raw);
+            const latitude = parsed?.latitude;
+            const longitude = parsed?.longitude;
+            const accuracy = parsed?.accuracy;
+            const ts = parsed?.ts;
+
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                return null;
+            }
+
+            return {
+                latitude,
+                longitude,
+                accuracy: Number.isFinite(accuracy) ? accuracy : null,
+                ts: typeof ts === 'number' ? ts : null,
+            };
+        } catch {
+            return null;
+        }
+    };
+
+    const saveStoredPosition = (pos) => {
+        try {
+            window.localStorage?.setItem?.(STORAGE_KEY, JSON.stringify(pos));
+        } catch {
+            return;
+        }
+    };
+
+    const shouldAcceptPosition = (next) => {
+        if (!next || !Number.isFinite(next.latitude) || !Number.isFinite(next.longitude)) {
+            return false;
+        }
+
+        const stored = loadStoredPosition();
+        const prev = window.__subsiGasUserPosition;
+
+        const nextAccuracy = Number.isFinite(next.accuracy) ? next.accuracy : null;
+        const prevAccuracy = prev && Number.isFinite(prev.accuracy) ? prev.accuracy : null;
+        const storedAccuracy = stored && Number.isFinite(stored.accuracy) ? stored.accuracy : null;
+
+        if ((stored || prev) && !Number.isFinite(nextAccuracy)) {
+            return false;
+        }
+
+        if (Number.isFinite(nextAccuracy) && nextAccuracy > 2000) {
+            return false;
+        }
+
+        const reference = stored && Number.isFinite(stored.latitude) && Number.isFinite(stored.longitude)
+            ? stored
+            : prev;
+
+        if (reference && Number.isFinite(reference.latitude) && Number.isFinite(reference.longitude)) {
+            const jumpKm = haversineDistanceKm(
+                reference.latitude,
+                reference.longitude,
+                next.latitude,
+                next.longitude,
+            );
+
+            const refAccuracy = Number.isFinite(storedAccuracy) ? storedAccuracy : prevAccuracy;
+
+            if (Number.isFinite(refAccuracy) && refAccuracy <= 200) {
+                if (
+                    jumpKm > 5 &&
+                    (!Number.isFinite(nextAccuracy) || nextAccuracy > 200)
+                ) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     };
 
     const toFriendlyGeoError = (err) => {
@@ -301,7 +406,19 @@ function ensurePublicDirections(map) {
     const getCachedPosition = () => {
         const pos = window.__subsiGasUserPosition;
         if (!pos || !Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) {
-            return null;
+            const stored = loadStoredPosition();
+            if (!stored) {
+                return null;
+            }
+
+            window.__subsiGasUserPosition = {
+                latitude: stored.latitude,
+                longitude: stored.longitude,
+                accuracy: stored.accuracy,
+                ts: stored.ts ?? Date.now(),
+            };
+
+            return window.__subsiGasUserPosition;
         }
 
         if (typeof pos.ts === 'number' && Date.now() - pos.ts > 60_000) {
@@ -331,8 +448,9 @@ function ensurePublicDirections(map) {
                     (pos) => {
                         const latitude = pos.coords.latitude;
                         const longitude = pos.coords.longitude;
+                        const accuracy = typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null;
 
-                        const payload = { latitude, longitude, ts: Date.now() };
+                        const payload = { latitude, longitude, accuracy, ts: Date.now() };
                         window.__subsiGasUserPosition = payload;
                         resolve(payload);
                     },
@@ -346,16 +464,16 @@ function ensurePublicDirections(map) {
 
         try {
             return await requestOnce({
-                enableHighAccuracy: false,
-                timeout: 20000,
-                maximumAge: 60000,
+                enableHighAccuracy: true,
+                timeout: 25000,
+                maximumAge: 0,
             });
         } catch (err) {
             if (err?.code === 2 || err?.code === 3) {
                 return await requestOnce({
-                    enableHighAccuracy: true,
-                    timeout: 30000,
-                    maximumAge: 0,
+                    enableHighAccuracy: false,
+                    timeout: 20000,
+                    maximumAge: 60000,
                 });
             }
 
@@ -376,7 +494,11 @@ function ensurePublicDirections(map) {
             throw new Error('routing_failed');
         }
 
-        return route.geometry.coordinates;
+        return {
+            coordinates: route.geometry.coordinates,
+            distanceMeters: typeof route.distance === 'number' ? route.distance : null,
+            durationSeconds: typeof route.duration === 'number' ? route.duration : null,
+        };
     };
 
     const drawRoute = async (lat, lng, name) => {
@@ -401,26 +523,46 @@ function ensurePublicDirections(map) {
 
         routeLayer.clearLayers();
 
-        window.L.marker([from.latitude, from.longitude], {
+        const fromMarker = window.L.marker([from.latitude, from.longitude], {
             icon: pinIcon('#2563eb', 'A'),
         })
             .addTo(routeLayer)
             .bindPopup('Lokasi Anda');
 
-        window.L.marker([to.latitude, to.longitude], {
+        const toMarker = window.L.marker([to.latitude, to.longitude], {
             icon: pinIcon('#ef4444', 'B'),
         })
             .addTo(routeLayer)
             .bindPopup(name ? `Tujuan: ${name}` : 'Tujuan');
 
         try {
-            const coords = await fetchRoute(from, to);
-            const latlngs = coords.map(([cLng, cLat]) => [cLat, cLng]);
+            const route = await fetchRoute(from, to);
+            const latlngs = route.coordinates.map(([cLng, cLat]) => [cLat, cLng]);
             const polyline = window.L.polyline(latlngs, {
                 color: '#2563eb',
                 weight: 5,
                 opacity: 0.9,
             }).addTo(routeLayer);
+
+            const distanceKm = Number.isFinite(route.distanceMeters) ? route.distanceMeters / 1000 : null;
+            const friendlyDistance = formatDistance(distanceKm);
+            const friendlyDuration = formatDuration(route.durationSeconds);
+
+            if (friendlyDistance || friendlyDuration) {
+                const meta = [
+                    friendlyDistance ? `Jarak rute: ${friendlyDistance}` : null,
+                    friendlyDuration ? `Estimasi: ${friendlyDuration}` : null,
+                ]
+                    .filter(Boolean)
+                    .join('<br>');
+
+                toMarker.bindPopup(
+                    `${name ? `Tujuan: ${name}<br>` : ''}${meta}`,
+                );
+                toMarker.openPopup();
+            } else {
+                fromMarker.openPopup();
+            }
 
             activeMap.fitBounds(polyline.getBounds(), { padding: [24, 24] });
         } catch (e) {
@@ -452,6 +594,27 @@ function ensurePublicDirections(map) {
             return;
         }
 
+        const stored = loadStoredPosition();
+        if (stored) {
+            window.__subsiGasUserPosition = {
+                latitude: stored.latitude,
+                longitude: stored.longitude,
+                accuracy: stored.accuracy,
+                ts: stored.ts ?? Date.now(),
+            };
+            setUserMarker(stored.latitude, stored.longitude);
+            dispatchToLivewire('geo-position', { latitude: stored.latitude, longitude: stored.longitude });
+
+            const activeMap = window.__subsiGasPublicDirectionsMap;
+            if (activeMap && !window.__subsiGasPublicHasCenteredToUser) {
+                activeMap.setView([stored.latitude, stored.longitude], 13);
+                window.__subsiGasPublicHasCenteredToUser = true;
+                if (Number.isFinite(stored.accuracy)) {
+                    window.__subsiGasPublicCenteredAccuracy = stored.accuracy;
+                }
+            }
+        }
+
         if (!navigator.geolocation) {
             window.__subsiGasGeoInitialized = true;
             return;
@@ -465,8 +628,17 @@ function ensurePublicDirections(map) {
         const onPos = (pos) => {
             const latitude = pos.coords.latitude;
             const longitude = pos.coords.longitude;
+            const accuracy = typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null;
 
-            window.__subsiGasUserPosition = { latitude, longitude, ts: Date.now() };
+            const payload = { latitude, longitude, accuracy, ts: Date.now() };
+            if (!shouldAcceptPosition(payload)) {
+                return;
+            }
+
+            window.__subsiGasUserPosition = payload;
+            if (Number.isFinite(accuracy) && accuracy <= 200) {
+                saveStoredPosition(payload);
+            }
             setUserMarker(latitude, longitude);
             dispatchToLivewire('geo-position', { latitude, longitude });
 
@@ -475,22 +647,31 @@ function ensurePublicDirections(map) {
                 return;
             }
 
-            if (!window.__subsiGasPublicHasCenteredToUser) {
+            const prevAccuracy = window.__subsiGasPublicCenteredAccuracy;
+            const canImproveCenter =
+                Number.isFinite(accuracy) &&
+                (!Number.isFinite(prevAccuracy) || accuracy < prevAccuracy);
+
+            if (!window.__subsiGasPublicHasCenteredToUser || canImproveCenter) {
                 activeMap.setView([latitude, longitude], 13);
                 window.__subsiGasPublicHasCenteredToUser = true;
+
+                if (Number.isFinite(accuracy)) {
+                    window.__subsiGasPublicCenteredAccuracy = accuracy;
+                }
             }
         };
 
         navigator.geolocation.getCurrentPosition(onPos, () => {}, {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 30000,
+            timeout: 20000,
+            maximumAge: 0,
         });
 
         navigator.geolocation.watchPosition(onPos, () => {}, {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 30000,
+            timeout: 20000,
+            maximumAge: 0,
         });
 
         window.__subsiGasGeoInitialized = true;

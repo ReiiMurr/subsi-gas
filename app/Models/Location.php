@@ -99,7 +99,7 @@ class Location extends Model
             }
         }
 
-        return Storage::url($this->photo);
+        return Storage::disk('public')->url($this->photo);
     }
 
     private function convertStoredPhotoToWebp(): ?string
