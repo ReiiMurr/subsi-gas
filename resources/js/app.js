@@ -38,6 +38,31 @@ function dispatchToLivewire(eventName, payload) {
     }
 }
 
+function initPublicLivewireBridge() {
+    const attach = () => {
+        if (!window.Livewire || typeof window.Livewire.on !== 'function') {
+            return;
+        }
+
+        if (window.__subsiGasPublicListenerAdded) {
+            return;
+        }
+
+        window.Livewire.on('public-locations-updated', ({ locations }) => {
+            window.__subsiGasPublicLastLocations = locations;
+
+            if (Array.isArray(locations) && typeof window.__subsiGasPublicSetMarkers === 'function') {
+                window.__subsiGasPublicSetMarkers(locations);
+            }
+        });
+
+        window.__subsiGasPublicListenerAdded = true;
+    };
+
+    window.addEventListener('livewire:init', attach);
+    attach();
+}
+
 function initMapPickers() {
     const pickers = document.querySelectorAll('[data-map-picker]');
 
@@ -90,56 +115,127 @@ function markerColor(stock) {
     return '#22c55e';
 }
 
-function ensurePublicLocationsListener(map, markersLayer) {
-    if (window.__subsiGasPublicListenerAdded) {
-        return;
+function pinIcon(color, label = '') {
+    const safeLabel = (label ?? '').toString();
+    const text = safeLabel
+        ? `<text x="12" y="10.5" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial">${safeLabel}</text>`
+        : '';
+
+    return window.L.divIcon({
+        className: '',
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+        popupAnchor: [0, -26],
+        html: `
+                <div style="width:28px;height:28px;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="${color}" d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
+                        ${text}
+                    </svg>
+                </div>
+            `.trim(),
+    });
+}
+
+function haversineDistanceKm(lat1, lng1, lat2, lng2) {
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function formatDistance(distanceKm) {
+    if (!Number.isFinite(distanceKm)) {
+        return null;
     }
 
+    if (distanceKm < 1) {
+        return `${Math.round(distanceKm * 1000)} m`;
+    }
+
+    return `${distanceKm.toFixed(2)} km`;
+}
+
+function ensurePublicLocationsListener(map, markersLayer) {
+    window.__subsiGasPublicMarkersLayer = markersLayer;
+
     const setMarkers = (locations) => {
-        markersLayer.clearLayers();
+        const layer = window.__subsiGasPublicMarkersLayer;
+        if (!layer) {
+            return;
+        }
+
+        layer.clearLayers();
 
         locations.forEach((loc) => {
+            if (!Number.isFinite(loc?.latitude) || !Number.isFinite(loc?.longitude)) {
+                return;
+            }
+
             const color = markerColor(loc.stock);
 
-            window.L.circleMarker([loc.latitude, loc.longitude], {
-                radius: 8,
-                color,
-                fillColor: color,
-                fillOpacity: 0.95,
+            let distanceKm = Number.isFinite(loc?.distance) ? loc.distance : null;
+            if (!Number.isFinite(distanceKm)) {
+                const pos = window.__subsiGasUserPosition;
+                if (pos && Number.isFinite(pos.latitude) && Number.isFinite(pos.longitude)) {
+                    distanceKm = haversineDistanceKm(
+                        pos.latitude,
+                        pos.longitude,
+                        loc.latitude,
+                        loc.longitude,
+                    );
+                }
+            }
+
+            const formattedDistance = formatDistance(distanceKm);
+
+            const meta = [
+                `<div style="opacity:.75;font-size:12px;margin-top:2px">Stock: ${loc.stock}</div>`,
+            ];
+
+            if (formattedDistance) {
+                meta.push(
+                    `<div style="opacity:.75;font-size:12px;margin-top:2px">Jarak: ${formattedDistance}</div>`,
+                );
+            }
+
+            window.L.marker([loc.latitude, loc.longitude], {
+                icon: pinIcon(color),
             })
-                .addTo(markersLayer)
+                .addTo(layer)
                 .bindPopup(
-                    `<div style="min-width: 200px"><div style="font-weight: 600">${loc.name}</div><div style="opacity:.75;font-size:12px;margin-top:2px">Stock: ${loc.stock}</div></div>`,
+                    `<div style="min-width: 220px"><div style="font-weight: 600">${loc.name}</div>${meta.join('')}</div>`,
                 );
         });
     };
 
-    const attach = () => {
-        if (!window.Livewire || typeof window.Livewire.on !== 'function') {
-            return;
-        }
+    window.__subsiGasPublicSetMarkers = setMarkers;
 
-        window.Livewire.on('public-locations-updated', ({ locations, center }) => {
-            if (Array.isArray(locations)) {
-                setMarkers(locations);
-            }
-        });
-
-        window.__subsiGasPublicListenerAdded = true;
-    };
-
-    window.addEventListener('livewire:init', attach);
-    attach();
+    if (Array.isArray(window.__subsiGasPublicLastLocations)) {
+        setMarkers(window.__subsiGasPublicLastLocations);
+    }
 }
 
 function ensurePublicDirections(map) {
+    window.__subsiGasPublicDirectionsMap = map;
+    window.__subsiGasPublicRouteLayer = window.L.layerGroup().addTo(map);
+    window.__subsiGasPublicUserLayer = window.L.layerGroup().addTo(map);
+    window.__subsiGasPublicHasCenteredToUser = false;
+
     if (window.__subsiGasPublicDirectionsAdded) {
         return;
     }
-
-    const routeLayer = window.L.layerGroup().addTo(map);
-    const userLayer = window.L.layerGroup().addTo(map);
-    let hasCenteredToUser = false;
 
     const isGeoAllowedContext = () => {
         if (window.isSecureContext) {
@@ -151,7 +247,12 @@ function ensurePublicDirections(map) {
     };
 
     const setUserMarker = (lat, lng) => {
-        userLayer.clearLayers();
+        const layer = window.__subsiGasPublicUserLayer;
+        if (!layer) {
+            return;
+        }
+
+        layer.clearLayers();
 
         window.L.circleMarker([lat, lng], {
             radius: 8,
@@ -159,25 +260,9 @@ function ensurePublicDirections(map) {
             fillColor: '#2563eb',
             fillOpacity: 0.9,
         })
-            .addTo(userLayer)
+            .addTo(layer)
             .bindPopup('Lokasi Anda');
     };
-
-    const pinIcon = (color, label) =>
-        window.L.divIcon({
-            className: '',
-            iconSize: [28, 28],
-            iconAnchor: [14, 28],
-            popupAnchor: [0, -26],
-            html: `
-                <div style="width:28px;height:28px;">
-                    <svg width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path fill="${color}" d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
-                        <text x="12" y="10.5" text-anchor="middle" font-size="7" font-weight="700" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial">${label}</text>
-                    </svg>
-                </div>
-            `.trim(),
-        });
 
     const toFriendlyGeoError = (err) => {
         const type = err?.type || err?.message;
@@ -295,6 +380,12 @@ function ensurePublicDirections(map) {
     };
 
     const drawRoute = async (lat, lng, name) => {
+        const activeMap = window.__subsiGasPublicDirectionsMap;
+        const routeLayer = window.__subsiGasPublicRouteLayer;
+        if (!activeMap || !routeLayer) {
+            return;
+        }
+
         let from;
         try {
             from = await requestDevicePosition();
@@ -331,7 +422,7 @@ function ensurePublicDirections(map) {
                 opacity: 0.9,
             }).addTo(routeLayer);
 
-            map.fitBounds(polyline.getBounds(), { padding: [24, 24] });
+            activeMap.fitBounds(polyline.getBounds(), { padding: [24, 24] });
         } catch (e) {
             alert('Gagal membuat rute. Coba lagi ya.');
         }
@@ -357,17 +448,17 @@ function ensurePublicDirections(map) {
 
     const initGeolocation = () => {
         const wrapper = document.querySelector('[data-public-landing]');
-        if (!wrapper || wrapper.dataset.geoInitialized === '1') {
+        if (!wrapper || window.__subsiGasGeoInitialized) {
             return;
         }
 
         if (!navigator.geolocation) {
-            wrapper.dataset.geoInitialized = '1';
+            window.__subsiGasGeoInitialized = true;
             return;
         }
 
         if (!isGeoAllowedContext()) {
-            wrapper.dataset.geoInitialized = '1';
+            window.__subsiGasGeoInitialized = true;
             return;
         }
 
@@ -377,10 +468,16 @@ function ensurePublicDirections(map) {
 
             window.__subsiGasUserPosition = { latitude, longitude, ts: Date.now() };
             setUserMarker(latitude, longitude);
+            dispatchToLivewire('geo-position', { latitude, longitude });
 
-            if (!hasCenteredToUser) {
-                map.setView([latitude, longitude], 13);
-                hasCenteredToUser = true;
+            const activeMap = window.__subsiGasPublicDirectionsMap;
+            if (!activeMap) {
+                return;
+            }
+
+            if (!window.__subsiGasPublicHasCenteredToUser) {
+                activeMap.setView([latitude, longitude], 13);
+                window.__subsiGasPublicHasCenteredToUser = true;
             }
         };
 
@@ -396,7 +493,7 @@ function ensurePublicDirections(map) {
             maximumAge: 30000,
         });
 
-        wrapper.dataset.geoInitialized = '1';
+        window.__subsiGasGeoInitialized = true;
     };
 
     initGeolocation();
@@ -414,15 +511,19 @@ function initPublicMap() {
         return;
     }
 
+    if (window.__subsiGasPublicMap && typeof window.__subsiGasPublicMap.remove === 'function') {
+        window.__subsiGasPublicMap.remove();
+    }
+
     const map = window.L.map(canvas).setView([-6.2, 106.816666], 12);
     tileLayer().addTo(map);
+
+    window.__subsiGasPublicMap = map;
 
     const markersLayer = window.L.layerGroup().addTo(map);
 
     ensurePublicLocationsListener(map, markersLayer);
     ensurePublicDirections(map);
-
-    window.__subsiGasPublicMap = map;
 
     wrapper.dataset.initialized = '1';
 }
@@ -436,3 +537,5 @@ function initAllMaps() {
 
 document.addEventListener('DOMContentLoaded', initAllMaps);
 document.addEventListener('livewire:navigated', initAllMaps);
+
+initPublicLivewireBridge();

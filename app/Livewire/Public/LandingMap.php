@@ -3,11 +3,25 @@
 namespace App\Livewire\Public;
 
 use App\Models\Location;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class LandingMap extends Component
 {
     public string $q = '';
+
+    public ?float $latitude = null;
+
+    public ?float $longitude = null;
+
+    #[On('geo-position')]
+    public function setPosition(float $latitude, float $longitude): void
+    {
+        $this->latitude = $latitude;
+        $this->longitude = $longitude;
+
+        $this->broadcastLocations();
+    }
 
     public function updatedQ(): void
     {
@@ -23,6 +37,37 @@ class LandingMap extends Component
     {
         $query = Location::query();
 
+        if ($this->latitude !== null && $this->longitude !== null) {
+            $driver = $query->getConnection()->getDriverName();
+
+            if ($driver === 'sqlite') {
+                return $query
+                    ->when($this->q !== '', function ($q) {
+                        $q->where(function ($q) {
+                            $q->where('name', 'like', '%'.$this->q.'%')
+                                ->orWhere('address', 'like', '%'.$this->q.'%');
+                        });
+                    })
+                    ->get()
+                    ->map(function ($location) {
+                        $location->distance = Location::haversineDistanceKm(
+                            $this->latitude,
+                            $this->longitude,
+                            (float) $location->latitude,
+                            (float) $location->longitude,
+                        );
+
+                        return $location;
+                    })
+                    ->sortBy('distance')
+                    ->take(30)
+                    ->values();
+            }
+
+            $query->withDistance($this->latitude, $this->longitude)
+                ->orderBy('distance');
+        }
+
         return $query
             ->when($this->q !== '', function ($q) {
                 $q->where(function ($q) {
@@ -30,7 +75,9 @@ class LandingMap extends Component
                         ->orWhere('address', 'like', '%'.$this->q.'%');
                 });
             })
-            ->orderByDesc('updated_at')
+            ->when($this->latitude === null || $this->longitude === null, function ($q) {
+                $q->orderByDesc('updated_at');
+            })
             ->limit(30)
             ->get();
     }
@@ -54,8 +101,8 @@ class LandingMap extends Component
         })->values()->all();
 
         $this->dispatch('public-locations-updated', locations: $locations, center: [
-            'latitude' => null,
-            'longitude' => null,
+            'latitude' => $this->latitude,
+            'longitude' => $this->longitude,
         ]);
     }
 
