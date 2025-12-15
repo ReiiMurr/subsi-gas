@@ -62,54 +62,67 @@
                         <x-heroicon-o-moon class="size-5" x-show="$flux.appearance !== 'dark'" />
                     </button>
 
-                    <x-profile-dropdown class="flex-1">
-                        <x-slot:trigger>
+                    <div x-data="{ open: false }" class="relative flex-1">
+                        <button @click="open = !open" type="button" class="flex w-full items-center gap-x-2 rounded-lg p-1 text-left transition-colors duration-200 hover:bg-slate-100 dark:hover:bg-slate-800">
                             <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full">
                                 <span class="flex h-full w-full items-center justify-center bg-slate-200 font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                                     {{ auth()->user()->initials() }}
                                 </span>
                             </span>
-                            <span class="min-w-0 flex-1 text-left">
+                            <span class="min-w-0 flex-1">
                                 <span class="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{{ auth()->user()->name }}</span>
                             </span>
                             <x-heroicon-o-chevron-up-down class="size-4 shrink-0 text-slate-500 dark:text-slate-400" />
-                        </x-slot:trigger>
+                        </button>
 
-                        <div class="p-1.5">
-                            <div class="flex items-center gap-x-3 px-2 py-1.5">
-                                <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full">
-                                    <span class="flex h-full w-full items-center justify-center bg-slate-200 font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                                        {{ auth()->user()->initials() }}
+                        <div
+                            x-show="open"
+                            @click.away="open = false"
+                            x-transition:enter="transition ease-out duration-100"
+                            x-transition:enter-start="transform opacity-0 scale-95"
+                            x-transition:enter-end="transform opacity-100 scale-100"
+                            x-transition:leave="transition ease-in duration-75"
+                            x-transition:leave-start="transform opacity-100 scale-100"
+                            x-transition:leave-end="transform opacity-0 scale-95"
+                            class="absolute bottom-full mb-2 w-full min-w-60 origin-bottom-left rounded-xl bg-white p-1.5 shadow-lg ring-1 ring-slate-900/5 dark:bg-slate-800 dark:ring-slate-50/10"
+                            style="display: none;"
+                        >
+                            <div class="p-1.5">
+                                <div class="flex items-center gap-x-3 px-2 py-1.5">
+                                    <span class="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full">
+                                        <span class="flex h-full w-full items-center justify-center bg-slate-200 font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                                            {{ auth()->user()->initials() }}
+                                        </span>
                                     </span>
-                                </span>
-                                <div class="min-w-0 flex-1">
-                                    <div class="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{{ auth()->user()->name }}</div>
-                                    <div class="truncate text-xs text-slate-500 dark:text-slate-400">{{ auth()->user()->email }}</div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{{ auth()->user()->name }}</div>
+                                        <div class="truncate text-xs text-slate-500 dark:text-slate-400">{{ auth()->user()->email }}</div>
+                                    </div>
                                 </div>
                             </div>
+
+                            <hr class="border-slate-200 dark:border-slate-700" />
+
+                            <div class="p-1.5">
+                                <a href="{{ route('profile.edit') }}" wire:navigate class="flex w-full items-center gap-x-3 rounded-md px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/70">
+                                    <x-heroicon-o-cog-6-tooth class="size-5" />
+                                    {{ __('Settings') }}
+                                </a>
+                            </div>
+
+                            <hr class="border-slate-200 dark:border-slate-700" />
+
+                            <div class="p-1.5">
+                                <form method="POST" action="{{ route('logout') }}" class="w-full">
+                                    @csrf
+                                    <button type="submit" class="flex w-full items-center gap-x-3 rounded-md px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/70">
+                                        <x-heroicon-o-arrow-left-on-rectangle class="size-5" />
+                                        {{ __('Log Out') }}
+                                    </button>
+                                </form>
+                            </div>
                         </div>
-
-                        <hr class="border-slate-200 dark:border-slate-800" />
-
-                        <div class="p-1.5">
-                            <a href="{{ route('profile.edit') }}" wire:navigate class="flex w-full items-center gap-x-3 rounded-md px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/70">
-                                <x-heroicon-o-cog-6-tooth class="size-5" />
-                                {{ __('Settings') }}
-                            </a>
-                        </div>
-
-                        <hr class="border-slate-200 dark:border-slate-800" />
-
-                        <div class="p-1.5">
-                            <form method="POST" action="{{ route('logout') }}" class="w-full">
-                                @csrf
-                                <button type="submit" class="flex w-full items-center gap-x-3 rounded-md px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800/70">
-                                    <x-heroicon-o-arrow-left-on-rectangle class="size-5" />
-                                    {{ __('Log Out') }}
-                                </button>
-                            </form>
-                        </div>
-                    </x-profile-dropdown>
+                    </div>
                 </div>
             </div>
         </div>
