@@ -94,8 +94,8 @@
                             </td>
                             <td class="p-3 text-right">
                                 <div class="flex justify-end gap-2">
-                                    <flux:button variant="outline" size="sm" wire:click="resendInvite({{ $user->id }})">
-                                        {{ __('Resend Invite') }}
+                                    <flux:button variant="outline" size="sm" href="{{ route('admin.distributors.edit', $user) }}" wire:navigate>
+                                        {{ __('Edit') }}
                                     </flux:button>
                                     <flux:button variant="outline" size="sm" wire:click="toggleActive({{ $user->id }})">
                                         {{ $user->is_active ? __('Deactivate') : __('Activate') }}

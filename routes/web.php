@@ -5,6 +5,7 @@ use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Admin\Dashboard as AdminDashboard;
 use App\Livewire\Admin\DistributorCreate as AdminDistributorCreate;
+use App\Livewire\Admin\DistributorEdit as AdminDistributorEdit;
 use App\Livewire\Admin\DistributorList as AdminDistributorList;
 use App\Livewire\Admin\UserList as AdminUserList;
 use App\Livewire\Admin\LocationList as AdminLocationList;
@@ -48,6 +49,7 @@ Route::prefix('admin')
         Route::get('dashboard', AdminDashboard::class)->name('admin.dashboard');
         Route::get('distributors', AdminDistributorList::class)->name('admin.distributors');
         Route::get('distributors/create', AdminDistributorCreate::class)->name('admin.distributors.create');
+        Route::get('distributors/{user}/edit', AdminDistributorEdit::class)->name('admin.distributors.edit');
         Route::get('locations', AdminLocationList::class)->name('admin.locations');
         Route::get('reports/export', AdminReportsExport::class)->name('admin.reports.export');
     });

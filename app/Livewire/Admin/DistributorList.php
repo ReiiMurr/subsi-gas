@@ -3,7 +3,6 @@
 namespace App\Livewire\Admin;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Password;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -56,17 +55,6 @@ class DistributorList extends Component
         $selected = collect($this->selected)->map(fn ($id) => (string) $id);
 
         $this->selectAll = $pageIds->diff($selected)->isEmpty();
-    }
-
-    public function resendInvite(int $userId): void
-    {
-        $user = User::query()
-            ->where('role', 'distributor')
-            ->findOrFail($userId);
-
-        Password::broker()->sendResetLink(['email' => $user->email]);
-
-        session()->flash('status', 'Undangan berhasil dikirim ulang.');
     }
 
     public function toggleActive(int $userId): void

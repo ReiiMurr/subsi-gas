@@ -47,9 +47,7 @@ test('non-admin cannot access admin distributor routes', function () {
     $this->get(route('admin.distributors.create'))->assertStatus(403);
 });
 
-test('admin can deactivate and resend invite from distributor list', function () {
-    Notification::fake();
-
+test('admin can deactivate distributor from distributor list', function () {
     $admin = User::factory()->create([
         'role' => 'admin',
         'is_active' => true,
@@ -68,10 +66,4 @@ test('admin can deactivate and resend invite from distributor list', function ()
         ->assertHasNoErrors();
 
     expect($distributor->refresh()->is_active)->toBeFalse();
-
-    Livewire::test(DistributorList::class)
-        ->call('resendInvite', $distributor->id)
-        ->assertHasNoErrors();
-
-    Notification::assertSentTo($distributor, ResetPassword::class);
 });
